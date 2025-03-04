@@ -6,6 +6,31 @@ __pycache__/
 # C extensions
 *.so
 
+# Some personal directories to ignore
+vision/
+tf2_tutorials/Custom Dataset/
+slides_and_materials/
+projects/
+GenerativeModels/Theory/
+GenerativeModels/Practical/dataset/
+GenerativeModels/Practical/Problems/dataset/
+GenerativeModels/Practical/Problems/plots/
+GenerativeModels/Practical/Projects/
+GenerativeModels/Practical/saved_model/
+GenerativeModels/Practical/Problems/checkpoint_decoded_image/
+GenerativeModels/Practical/checkpoint_decoded_image/
+GenerativeModels/Practical/checkpoints/
+GenerativeModels/Practical/Key Points/
+GenerativeModels/Practical/logs/train/
+GenerativeModels/Practical/logs/validation/
+GenerativeModels/Practical/Practise/checkpoints/
+GenerativeModels/Practical/Practise/plots/
+GenerativeModels/Practical/Practise/saved_model/
+GenerativeModels/Practical/Practise/TensorBoard/
+sequence_models/
+GenerativeModels/Practical/Problems/checkpoints
+
+
 # Distribution / packaging
 .Python
 build/
@@ -165,7 +190,7 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 
 # PyPI configuration file
 .pypirc
