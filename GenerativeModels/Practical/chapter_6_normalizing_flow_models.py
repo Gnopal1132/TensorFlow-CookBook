@@ -13,8 +13,23 @@ class RealNVP(tf.keras.models.Model):
         self.coupling_layers_count = coupling_layers   # We will stack many coupling layers together, every coupling layer represent a invertible function
         self.coupling_layer_list = [self.coupling_layers() for _ in range(self.coupling_layers_count)]
         
+        """
+        Since the input vector dimension is 2, hence we use two dimensional vectors shown below.
+        For general d-dimension,  
+        
+        """
         self.distribution = tfp.distributions.MultivariateNormalDiag(loc=[0., 0.], scale_diag=[1., 1.])
-        self.masks = np.array([[0, 1], [1, 0]] * (coupling_layers // 2), dtype=np.float32)
+        self.masks = np.array([[0, 1], [1, 0]] * (coupling_layers // 2), dtype=np.float32)  # We just need half because, for reversal we can just do 1 - self.mask[i]
+        """
+        Why do we need masks? Since each coupling layer only transforms one part of the input, we need to alternate which part is transformed. 
+        This ensures all dimensions get updated over multiple layers.
+        
+        Example:
+            First layer: [0, 1] → First variable is fixed, second variable is transformed.
+            Second layer: [1, 0] → First variable is transformed, second variable is fixed.
+            This alternates across layers.
+
+        """
 
         # Loss tracker
         self.loss_tracker = tf.keras.metrics.Mean(name='loss')
@@ -42,23 +57,52 @@ class RealNVP(tf.keras.models.Model):
 
         return tf.keras.Model(inputs=input_layer, outputs=[s_final, t_final])
 
-    
+    """
+    Recap: What is Happening?
+        1️⃣ Masking ensures only half of the input is transformed at a time.
+        2️⃣ Affine transformation is applied selectively using s and t.
+        3️⃣ Jacobian determinant correction ensures correct probability computation.
+        4️⃣ Alternating masks ensure all dimensions are modified over multiple layers.
+    """
     def call(self, x, training=True):
         log_det_inv = 0
         direction = 1
 
         if training:
-            direction = -1
+            direction = -1  # direction = -1 for forward pass (training). +1 inverse pass (sampling)
         
         for i in range(self.coupling_layers_count)[::direction]:
-            x_masked = x * self.masks[i]
-            reversed_mask = 1 - self.masks[i]
-            s, t = self.coupling_layer_list[i](x_masked)
-            s *= reversed_mask
+            x_masked = x * self.masks[i]  # This hides one part of x by setting it to zero (using the mask). Suppose x = [3, 4] and mask = [1, 0], x_masked = [3, 0]
+            reversed_mask = 1 - self.masks[i]  # This means the transformation is applied only to the part of x that was originally masked out.
+            s, t = self.coupling_layer_list[i](x_masked)   # We get the corresponding s, and t vector
+            
+            # We zero out the part of s and t that corresponds to the unchanged part of x. This ensures that only the correct half of x is modified.
+            # We first set the unmodified half of 𝑠, 𝑡 to zero. Then, when we apply the transformation 𝑥′=𝑥⋅𝑒**𝑠 + 𝑡, only the correct part of 𝑥 is modified.
+           
+            s *= reversed_mask  
             t *= reversed_mask
+            """
+            So:
+                When forward, gate = (-1 - 1) / 2 = -1.
+                When inverse, gate = (1 - 1) / 2 = 0.
+                💡 Why do we need gate?
+
+                It controls the exponent in t * exp(gate * s).
+                In the forward pass, it helps compute the log-determinant.
+            """
             gate = (direction - 1) / 2
+
+            """
+            This updates only the transformed half of x. The first half remains unchanged (x_masked). The second half is updated using 𝑠 and 𝑡:
+
+                Forward (direction = -1): 𝑥′=𝑥⋅𝑒**(-𝑠) - 𝑡𝑒**(-𝑠)
+                Inverse (direction = 1):  𝑥′=𝑥⋅𝑒**𝑠 + 𝑡
+            Why use exponentials?
+            Ensures invertibility: Multiplication by e**s prevents singularities.
+                        
+            """
             x = (reversed_mask * (x * tf.exp(direction * s) + direction * t * tf.exp(gate * s)) + x_masked)
-            log_det_inv += gate * tf.reduce_sum(s, axis=1)
+            log_det_inv += gate * tf.reduce_sum(s, axis=1)    # This accumulates the log absolute determinant of the Jacobian.
         
         return x, log_det_inv
     
